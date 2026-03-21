@@ -1,0 +1,27 @@
+{
+  "name": "ai-practical-4",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "echo \"No tests configured\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kavindidewmininavodya/AI-Code-Assistant.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kavindidewmininavodya/AI-Code-Assistant/issues"
+  },
+  "homepage": "https://github.com/kavindidewmininavodya/AI-Code-Assistant#readme",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1"
+  }
+}

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Antigravity</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+
+<body>
+    <div class="mini-app">
+        <header class="mini-header">
+            <div class="logo">ANTIGRAVITY <span class="badge">MINI</span></div>
+            <div id="status-bar" class="status-neutral">RELIABLE // READY</div>
+        </header>
+
+        <main class="mini-content">
+            <div class="editor-pane">
+                <div class="pane-header">
+                    <span>LIVE EDITOR</span>
+                    <div class="pane-actions">
+                        <span id="lang-tag" class="tag">PLANTEXT</span>
+                        <button id="copy-editor" class="btn-text">COPY</button>
+                        <button id="clear-editor" class="btn-text">CLEAR</button>
+                    </div>
+                </div>
+                <pre><code id="mini-editor" contenteditable="true" spellcheck="false" title="Paste any code here...">// Paste your code here for instant analysis...</code></pre>
+            </div>
+
+            <div class="chat-pane">
+                <div class="pane-header">
+                    <span>ASSISTANT DEBRIEF</span>
+                    <button id="clear-chat" class="btn-text">CLEAR ALL</button>
+                </div>
+                <div id="mini-chat" class="chat-history">
+                    <div class="msg assistant">Welcome. I am the Mini Antigravity module. Paste your code on the left
+                        and ask anything below.</div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="mini-footer">
+            <div class="input-wrap">
+                <input type="text" id="mini-input" placeholder="Analyze, Refactor, Optimize..." autocomplete="off">
+                <button id="mini-send">SEND</button>
+            </div>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>
