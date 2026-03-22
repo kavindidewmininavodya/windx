@@ -15,8 +15,8 @@ const APP_URL = process.env.APP_URL || "http://localhost:3000";
 const APP_NAME = process.env.APP_NAME || "WindX";
 
 const MAX_PROMPT_CHARS = Number(process.env.MAX_PROMPT_CHARS || 6000);
-const MAX_OUTPUT_TOKENS = Number(process.env.MAX_OUTPUT_TOKENS || 800);
-const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 40000);
+const MAX_OUTPUT_TOKENS = Number(process.env.MAX_OUTPUT_TOKENS || 1600);
+const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 60000);
 
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -146,6 +146,31 @@ app.post("/api/chat/stream", async (req, res) => {
     const decoder = new TextDecoder();
     let buffer = "";
 
+    const processDataLine = (line) => {
+      if (!line.startsWith("data:")) return false;
+
+      const payload = line.slice(5).trim();
+      if (!payload) return false;
+
+      if (payload === "[DONE]") {
+        res.write("event: done\ndata: {}\n\n");
+        res.end();
+        return true;
+      }
+
+      try {
+        const json = JSON.parse(payload);
+        const delta = json?.choices?.[0]?.delta?.content;
+        if (delta) {
+          res.write(`event: token\ndata: ${JSON.stringify({ token: delta })}\n\n`);
+        }
+      } catch {
+        // Ignore malformed chunks; continue streaming valid tokens.
+      }
+
+      return false;
+    };
+
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -155,24 +180,15 @@ app.post("/api/chat/stream", async (req, res) => {
       buffer = lines.pop() || "";
 
       for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const payload = line.slice(5).trim();
-
-        if (payload === "[DONE]") {
-          res.write("event: done\ndata: {}\n\n");
-          res.end();
+        if (processDataLine(line)) {
           return;
         }
+      }
+    }
 
-        try {
-          const json = JSON.parse(payload);
-          const delta = json?.choices?.[0]?.delta?.content;
-          if (delta) {
-            res.write(`event: token\ndata: ${JSON.stringify({ token: delta })}\n\n`);
-          }
-        } catch {
-          // Ignore malformed chunks; continue streaming valid tokens.
-        }
+    if (buffer.trim()) {
+      if (processDataLine(buffer.trim())) {
+        return;
       }
     }
 

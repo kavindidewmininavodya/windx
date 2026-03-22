@@ -1175,6 +1175,45 @@ async function handleSend(forcedPrompt = null) {
     const decoder = new TextDecoder();
     let buffer = "";
 
+    const processSseUpdate = (update) => {
+      if (!update.trim()) return;
+
+      const lines = update.split("\n");
+      const eventLine = lines.find((line) => line.startsWith("event:"));
+      const dataLine = lines.find((line) => line.startsWith("data:"));
+
+      if (!eventLine && !dataLine) return;
+
+      const eventName = eventLine ? eventLine.replace("event:", "").trim() : "";
+      const payload = dataLine ? dataLine.replace("data:", "").trim() : "";
+
+      if (eventName === "done") {
+        return;
+      }
+
+      if (!payload || payload === "{}" || payload === "[DONE]") {
+        return;
+      }
+
+      try {
+        const data = JSON.parse(payload);
+
+        if (eventName === "error") {
+          throw new Error(data.error || "Streaming failed");
+        }
+
+        if (data.token) {
+          fullResponse += data.token;
+          assistantMsg.innerHTML = marked.parse(fullResponse);
+          chat.scrollTop = chat.scrollHeight;
+        }
+      } catch (error) {
+        if (eventName === "error") {
+          throw error;
+        }
+      }
+    };
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -1184,26 +1223,15 @@ async function handleSend(forcedPrompt = null) {
       buffer = updates.pop() || "";
 
       for (const update of updates) {
-        if (!update.trim()) continue;
-        if (update.includes("event: done")) { isProcessing = false; continue; }
-
-        const lines = update.split("\n");
-        const dataLine = lines.find(l => l.startsWith("data:"));
-        if (dataLine) {
-          try {
-            const payload = dataLine.replace("data:", "").trim();
-            if (payload === "{}" || payload === "[DONE]") continue;
-
-            const data = JSON.parse(payload);
-            if (data.token) {
-              fullResponse += data.token;
-              assistantMsg.innerHTML = marked.parse(fullResponse);
-              chat.scrollTop = chat.scrollHeight;
-            }
-          } catch (e) { }
-        }
+        processSseUpdate(update);
       }
     }
+
+    const trailing = buffer.trim();
+    if (trailing) {
+      processSseUpdate(trailing);
+    }
+
     enhanceDiffBlocks(assistantMsg.parentElement);
     await renderMermaidInMessage(assistantMsg.parentElement);
     enhanceCodeBlocks(assistantMsg.parentElement);
