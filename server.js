@@ -127,7 +127,7 @@ app.post("/api/chat/stream", async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
+  if (res.flushHeaders) res.flushHeaders();
 
   try {
     const upstream = await requestWithFallback({ prompt: prompt.trim(), stream: true });
@@ -182,6 +182,12 @@ app.post("/api/chat/stream", async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`WindX server running on http://localhost:${port}`);
-});
+// Launch server only if running directly or in a non-production environment
+if (require.main === module || process.env.NODE_ENV !== 'production') {
+  app.listen(port, () => {
+    console.log(`WindX server running on http://localhost:${port}`);
+  });
+}
+
+// Export for Vercel serverless environment
+module.exports = app;
