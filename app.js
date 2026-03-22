@@ -6,6 +6,8 @@ const sendBtn = document.getElementById("mini-send");
 const statusTag = document.getElementById("status-bar");
 const langTag = document.getElementById("lang-tag");
 const clearEditorBtn = document.getElementById("clear-editor");
+const undoApplyBtn = document.getElementById("undo-apply");
+const redoApplyBtn = document.getElementById("redo-apply");
 const clearChatBtn = document.getElementById("clear-chat");
 const editorActionsToggleBtn = document.getElementById("editor-actions-toggle");
 const editorActionsPanel = document.getElementById("editor-actions-panel");
@@ -20,6 +22,55 @@ let isListening = false;
 let pendingOcrPrompt = "";
 let pendingOcrImageUrl = "";
 let pendingOcrImageName = "";
+const editorUndoHistory = [];
+const editorRedoHistory = [];
+const MAX_EDITOR_HISTORY = 40;
+
+function setEditorText(text) {
+  editor.innerText = text;
+  updateEditor();
+}
+
+function pushUndoState(text) {
+  const normalized = String(text || "");
+  const last = editorUndoHistory[editorUndoHistory.length - 1];
+  if (last === normalized) return;
+
+  editorUndoHistory.push(normalized);
+  if (editorUndoHistory.length > MAX_EDITOR_HISTORY) {
+    editorUndoHistory.shift();
+  }
+}
+
+function updateHistoryButtons() {
+  if (undoApplyBtn) undoApplyBtn.disabled = editorUndoHistory.length === 0;
+  if (redoApplyBtn) redoApplyBtn.disabled = editorRedoHistory.length === 0;
+}
+
+function commitEditorChange(nextText) {
+  pushUndoState(editor.innerText);
+  editorRedoHistory.length = 0;
+  setEditorText(nextText);
+  updateHistoryButtons();
+}
+
+undoApplyBtn?.addEventListener("click", () => {
+  if (!editorUndoHistory.length) return;
+
+  const previous = editorUndoHistory.pop();
+  editorRedoHistory.push(editor.innerText);
+  setEditorText(previous);
+  updateHistoryButtons();
+});
+
+redoApplyBtn?.addEventListener("click", () => {
+  if (!editorRedoHistory.length) return;
+
+  const next = editorRedoHistory.pop();
+  pushUndoState(editor.innerText);
+  setEditorText(next);
+  updateHistoryButtons();
+});
 
 function setEditorActionsOpen(isOpen) {
   if (!editorActionsPanel || !editorActionsToggleBtn) return;
@@ -327,9 +378,8 @@ clearEditorBtn?.addEventListener("click", async () => {
   );
   if (!result.isConfirmed) return;
 
-  editor.innerText = "";
+  commitEditorChange("");
   localStorage.removeItem(STORAGE_KEY_CODE);
-  updateEditor();
   showCenteredSuccess("Cleared", "Editor content has been removed.");
 });
 
@@ -774,6 +824,39 @@ function renderDiffLineList(lines, kind) {
   `;
 }
 
+function buildMergedTargetFromSegments(segments, acceptedHunks) {
+  const merged = [];
+  for (const segment of segments) {
+    if (segment.type === "equal") {
+      merged.push(...segment.lines);
+    } else if (acceptedHunks.has(segment.id)) {
+      merged.push(...segment.after);
+    } else {
+      merged.push(...segment.before);
+    }
+  }
+  return merged.join("\n");
+}
+
+function buildUnifiedPatch(beforeText, afterText, fileName = "editor.txt") {
+  const beforeLines = splitLines(normalizeNewlines(beforeText));
+  const afterLines = splitLines(normalizeNewlines(afterText));
+
+  const beforeCount = beforeLines.length;
+  const afterCount = afterLines.length;
+
+  const patchLines = [
+    `--- a/${fileName}`,
+    `+++ b/${fileName}`,
+    `@@ -1,${beforeCount} +1,${afterCount} @@`
+  ];
+
+  patchLines.push(...beforeLines.map((line) => `-${line}`));
+  patchLines.push(...afterLines.map((line) => `+${line}`));
+
+  return `${patchLines.join("\n")}\n`;
+}
+
 function createDiffCard(beforeText, afterText, languageHint = "code") {
   const beforeLines = splitLines(beforeText);
   const afterLines = splitLines(afterText);
@@ -818,7 +901,11 @@ function createDiffCard(beforeText, afterText, languageHint = "code") {
         <div class="it-diff-title">Smart Diff</div>
         <div class="it-diff-subtitle">${escapeHtml(languageHint.toUpperCase())} • before/after patch view</div>
       </div>
-      <button class="it-diff-apply" type="button">Apply to editor</button>
+      <div class="it-diff-tools">
+        <button class="it-diff-copy-patch" type="button">Copy Patch</button>
+        <button class="it-diff-download-patch" type="button">Download .patch</button>
+        <button class="it-diff-apply" type="button">Apply to editor</button>
+      </div>
     </div>
     <div class="it-diff-hunks">${hunksMarkup}</div>
   `;
@@ -843,19 +930,37 @@ function createDiffCard(beforeText, afterText, languageHint = "code") {
     });
   });
 
-  card.querySelector(".it-diff-apply")?.addEventListener("click", () => {
-    const merged = [];
-    for (const segment of segments) {
-      if (segment.type === "equal") {
-        merged.push(...segment.lines);
-      } else if (acceptedHunks.has(segment.id)) {
-        merged.push(...segment.after);
-      } else {
-        merged.push(...segment.before);
-      }
-    }
+  card.querySelector(".it-diff-copy-patch")?.addEventListener("click", async (event) => {
+    const mergedTarget = buildMergedTargetFromSegments(segments, acceptedHunks);
+    const patchText = buildUnifiedPatch(beforeText, mergedTarget, "live-editor.txt");
+    await navigator.clipboard.writeText(patchText);
 
-    const mergedTarget = merged.join("\n");
+    const btn = event.currentTarget;
+    if (!(btn instanceof HTMLElement)) return;
+    const old = btn.textContent;
+    btn.textContent = "Copied";
+    setTimeout(() => {
+      btn.textContent = old;
+    }, 1400);
+  });
+
+  card.querySelector(".it-diff-download-patch")?.addEventListener("click", () => {
+    const mergedTarget = buildMergedTargetFromSegments(segments, acceptedHunks);
+    const patchText = buildUnifiedPatch(beforeText, mergedTarget, "live-editor.txt");
+    const blob = new Blob([patchText], { type: "text/x-diff;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `windx-${Date.now()}.patch`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  card.querySelector(".it-diff-apply")?.addEventListener("click", () => {
+    const mergedTarget = buildMergedTargetFromSegments(segments, acceptedHunks);
     const segmentedPatch = applySegmentsPatchToEditor(editor.innerText, segments, acceptedHunks);
     const patched = segmentedPatch ?? applyBeforeAfterPatchToEditor(editor.innerText, beforeText, mergedTarget);
 
@@ -876,8 +981,7 @@ function createDiffCard(beforeText, afterText, languageHint = "code") {
       return;
     }
 
-    editor.innerText = patched;
-    updateEditor();
+    commitEditorChange(patched);
     showCenteredSuccess("Applied", "Selected hunks were applied to the editor.");
   });
 
@@ -1433,6 +1537,7 @@ document.getElementById("copy-curl")?.addEventListener("click", () => {
 // Initialization
 restoreState();
 updateEditor();
+updateHistoryButtons();
 
 // Update Time Diagnostic
 setInterval(() => {
