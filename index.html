@@ -16,6 +16,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
@@ -71,6 +72,11 @@
 
                 <footer class="mini-footer">
                     <div class="input-wrap">
+                        <div class="input-tools">
+                            <button id="voice-input" class="btn-input-tool" type="button" title="Voice Input" aria-label="Voice Input">🎤</button>
+                            <button id="ocr-upload-btn" class="btn-input-tool" type="button" title="Upload Error Screenshot" aria-label="Upload Error Screenshot">OCR</button>
+                            <input id="ocr-image-input" type="file" accept="image/*" hidden>
+                        </div>
                         <input type="text" id="mini-input" placeholder="Analyze, Refactor, Optimize..." autocomplete="off">
                         <button id="mini-send">SEND</button>
                     </div>

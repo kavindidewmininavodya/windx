@@ -9,9 +9,17 @@ const clearEditorBtn = document.getElementById("clear-editor");
 const clearChatBtn = document.getElementById("clear-chat");
 const editorActionsToggleBtn = document.getElementById("editor-actions-toggle");
 const editorActionsPanel = document.getElementById("editor-actions-panel");
+const voiceInputBtn = document.getElementById("voice-input");
+const ocrUploadBtn = document.getElementById("ocr-upload-btn");
+const ocrImageInput = document.getElementById("ocr-image-input");
 
 let isProcessing = false;
 let lastPrompt = "";
+let speechRecognizer = null;
+let isListening = false;
+let pendingOcrPrompt = "";
+let pendingOcrImageUrl = "";
+let pendingOcrImageName = "";
 
 function setEditorActionsOpen(isOpen) {
   if (!editorActionsPanel || !editorActionsToggleBtn) return;
@@ -26,6 +34,184 @@ editorActionsToggleBtn?.addEventListener("click", () => {
 });
 
 setEditorActionsOpen(false);
+
+function setVoiceListening(active) {
+  isListening = active;
+  voiceInputBtn?.classList.toggle("is-listening", active);
+  if (active) {
+    statusTag.textContent = "VOICE INPUT // LISTENING";
+    statusTag.className = "status-active";
+  } else if (!isProcessing) {
+    statusTag.textContent = "RELIABLE // READY";
+    statusTag.className = "status-neutral";
+  }
+}
+
+function setupVoiceInput() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition || !voiceInputBtn) {
+    if (voiceInputBtn) voiceInputBtn.disabled = true;
+    return;
+  }
+
+  speechRecognizer = new SpeechRecognition();
+  speechRecognizer.lang = "en-US";
+  speechRecognizer.interimResults = true;
+  speechRecognizer.continuous = false;
+
+  let transcriptFinal = "";
+
+  speechRecognizer.onstart = () => {
+    transcriptFinal = "";
+    setVoiceListening(true);
+  };
+
+  speechRecognizer.onresult = (event) => {
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      const text = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        transcriptFinal += `${text} `;
+      } else {
+        interim += text;
+      }
+    }
+    const joined = `${transcriptFinal}${interim}`.trim();
+    if (joined) {
+      input.value = joined;
+    }
+  };
+
+  speechRecognizer.onerror = () => {
+    setVoiceListening(false);
+  };
+
+  speechRecognizer.onend = () => {
+    setVoiceListening(false);
+  };
+
+  voiceInputBtn.addEventListener("click", () => {
+    if (!speechRecognizer) return;
+    if (isListening) {
+      speechRecognizer.stop();
+      return;
+    }
+    speechRecognizer.start();
+  });
+}
+
+function extractStackTraceFromOcrText(rawText) {
+  const text = String(rawText || "").replace(/\r/g, "");
+  const lines = text.split("\n");
+  const signal = /(exception|error|traceback|\sat\s+[^\s]+\(|file\s+"[^"]+",\s*line\s*\d+|caused by)/i;
+
+  const extracted = [];
+  let collecting = false;
+  let emptyCount = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (signal.test(trimmed)) {
+      collecting = true;
+      emptyCount = 0;
+    }
+
+    if (!collecting) continue;
+
+    extracted.push(line);
+
+    if (!trimmed) {
+      emptyCount += 1;
+      if (emptyCount >= 2 && extracted.length > 6) break;
+    } else {
+      emptyCount = 0;
+    }
+
+    if (extracted.length >= 80) break;
+  }
+
+  if (!extracted.length) {
+    return lines.slice(0, 40).join("\n").trim();
+  }
+
+  return extracted.join("\n").trim();
+}
+
+async function runOcrOnScreenshot(file) {
+  if (typeof Tesseract === "undefined") {
+    throw new Error("OCR library is not loaded");
+  }
+
+  statusTag.textContent = "OCR // EXTRACTING";
+  statusTag.className = "status-active";
+
+  const result = await Tesseract.recognize(file, "eng");
+  const text = result?.data?.text || "";
+  return extractStackTraceFromOcrText(text);
+}
+
+ocrUploadBtn?.addEventListener("click", () => {
+  ocrImageInput?.click();
+});
+
+ocrImageInput?.addEventListener("change", async (event) => {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+
+  try {
+    if (pendingOcrImageUrl) {
+      URL.revokeObjectURL(pendingOcrImageUrl);
+    }
+    pendingOcrImageUrl = URL.createObjectURL(file);
+    pendingOcrImageName = file.name;
+
+    const extracted = await runOcrOnScreenshot(file);
+    if (!extracted) {
+      pendingOcrPrompt = "";
+      showCenteredSuccess("OCR", "No readable text found in the screenshot.");
+      return;
+    }
+
+    pendingOcrPrompt = extracted;
+    if (typeof Swal !== "undefined") {
+      Swal.fire({
+        toast: true,
+        position: "center",
+        icon: "success",
+        title: "OCR ready",
+        text: "Text extracted. Click SEND to ask Assistant Debrief.",
+        timer: 1800,
+        showConfirmButton: false,
+        background: "#12171f",
+        color: "#e9f1ff"
+      });
+    }
+  } catch {
+    if (typeof Swal !== "undefined") {
+      Swal.fire({
+        toast: true,
+        position: "center",
+        icon: "error",
+        title: "OCR failed",
+        text: "Could not extract text from screenshot.",
+        timer: 2200,
+        showConfirmButton: false,
+        background: "#12171f",
+        color: "#e9f1ff"
+      });
+    }
+  } finally {
+    if (ocrImageInput) {
+      ocrImageInput.value = "";
+    }
+    if (!isProcessing && !isListening) {
+      statusTag.textContent = "RELIABLE // READY";
+      statusTag.className = "status-neutral";
+    }
+  }
+});
+
+setupVoiceInput();
 
 // Initialize Markdown (Marked.js)
 if (typeof marked !== 'undefined') {
@@ -304,6 +490,33 @@ function appendMessage(role, text) {
   }
 
   return content;
+}
+
+function appendImageMessage(role, imageSrc, caption = "") {
+  const msg = document.createElement("div");
+  msg.className = `msg ${role}`;
+
+  const content = document.createElement("div");
+  content.className = "msg-content";
+
+  const image = document.createElement("img");
+  image.className = "msg-inline-image";
+  image.src = imageSrc;
+  image.alt = caption || "Uploaded image";
+  image.loading = "lazy";
+  content.appendChild(image);
+
+  if (caption) {
+    const captionNode = document.createElement("div");
+    captionNode.className = "msg-inline-caption";
+    captionNode.textContent = caption;
+    content.appendChild(captionNode);
+  }
+
+  msg.appendChild(content);
+  chat.appendChild(msg);
+  chat.scrollTop = chat.scrollHeight;
+  localStorage.setItem(STORAGE_KEY_CHAT, chat.innerHTML);
 }
 
 // Re-runnable function to add Headers & Copy Buttons to any message
@@ -798,19 +1011,49 @@ async function renderMermaidInMessage(msgElement) {
 
 // AI Analysis Loop
 async function handleSend(forcedPrompt = null) {
-  const userText = forcedPrompt || input.value.trim();
+  const normalizedPrompt = (forcedPrompt && typeof forcedPrompt === "object" && "type" in forcedPrompt)
+    ? null
+    : forcedPrompt;
+  const typedInput = input.value.trim();
+  const visibleUserText = normalizedPrompt || typedInput;
+  const hiddenOcrText = pendingOcrPrompt;
+  const usingOcrPromptOnly = !visibleUserText && Boolean(hiddenOcrText);
+  const userText = visibleUserText || hiddenOcrText;
   const codeContext = editor.innerText.trim();
 
   if (isProcessing || (!userText && !codeContext)) return;
 
-  lastPrompt = userText;
-  if (!forcedPrompt) input.value = "";
+  lastPrompt = visibleUserText || userText;
+  if (!normalizedPrompt) {
+    input.value = "";
+    pendingOcrPrompt = "";
+  }
   isProcessing = true;
   sendBtn.disabled = true;
   statusTag.textContent = "DEEP_SCAN // ANALYZING";
   statusTag.className = "status-active";
 
-  appendMessage("user", userText || "Analyzing provided code...");
+  if (pendingOcrImageUrl) {
+    appendImageMessage("user", pendingOcrImageUrl, `Screenshot uploaded: ${pendingOcrImageName || "image"}`);
+    pendingOcrImageUrl = "";
+    pendingOcrImageName = "";
+  }
+
+  if (!usingOcrPromptOnly) {
+    appendMessage("user", visibleUserText || userText || "Analyzing provided code...");
+  }
+
+  let promptForModel = "";
+  if (hiddenOcrText && visibleUserText) {
+    // Keep OCR details hidden in UI but available to the model without forcing debug-style output.
+    const visiblePrompt = buildPrompt(visibleUserText, codeContext);
+    promptForModel = `${visiblePrompt}\n\nHidden OCR Context (do not quote verbatim unless relevant):\n${hiddenOcrText}`;
+  } else if (hiddenOcrText && !visibleUserText) {
+    const ocrOnlyPrompt = `Analyze the uploaded screenshot text and explain the likely issue clearly:\n\n${hiddenOcrText}`;
+    promptForModel = buildPrompt(ocrOnlyPrompt, codeContext);
+  } else {
+    promptForModel = buildPrompt(userText, codeContext);
+  }
 
   const assistantMsg = appendMessage("assistant", "");
   let fullResponse = "";
@@ -819,7 +1062,7 @@ async function handleSend(forcedPrompt = null) {
     const response = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: buildPrompt(userText, codeContext) })
+      body: JSON.stringify({ prompt: promptForModel })
     });
 
     if (!response.ok) throw new Error("Connection failed");
@@ -1053,7 +1296,7 @@ function detectRootCause({ combined, exceptionType, focusLine, frame }) {
   };
 }
 
-sendBtn.addEventListener("click", handleSend);
+sendBtn.addEventListener("click", () => handleSend());
 input.addEventListener("keydown", (e) => { if (e.key === "Enter") handleSend(); });
 
 // API Pro Suite Logic
