@@ -12,7 +12,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const PRIMARY_MODEL = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
 const FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL || "openai/gpt-4o-mini";
 const APP_URL = process.env.APP_URL || "http://localhost:3000";
-const APP_NAME = process.env.APP_NAME || "Quantum Code Assistant";
+const APP_NAME = process.env.APP_NAME || "WINDX";
 
 const MAX_PROMPT_CHARS = Number(process.env.MAX_PROMPT_CHARS || 6000);
 const MAX_OUTPUT_TOKENS = Number(process.env.MAX_OUTPUT_TOKENS || 800);
@@ -183,5 +183,5 @@ app.post("/api/chat/stream", async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`Quantum Code Assistant server running on http://localhost:${port}`);
+  console.log(`WINDX server running on http://localhost:${port}`);
 });

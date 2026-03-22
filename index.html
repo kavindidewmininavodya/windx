@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Antigravity</title>
+    <title>WindyX</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -15,47 +15,174 @@
         href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
 <body>
-    <div class="mini-app">
-        <header class="mini-header">
-            <div class="logo">ANTIGRAVITY <span class="badge">MINI</span></div>
-            <div id="status-bar" class="status-neutral">RELIABLE // READY</div>
-        </header>
+    <div class="viewport-stack">
+        <!-- Section 1: AI Assistant (Perfectly Centered View) -->
+        <section class="viewport-section">
+            <div class="mini-app">
+                <header class="mini-header">
+                    <div class="logo">WINDYX <span class="badge">MINI</span></div>
+                    <div id="status-bar" class="status-neutral">RELIABLE // READY</div>
+                </header>
 
-        <main class="mini-content">
-            <div class="editor-pane">
-                <div class="pane-header">
-                    <span>LIVE EDITOR</span>
-                    <div class="pane-actions">
-                        <span id="lang-tag" class="tag">PLANTEXT</span>
-                        <button id="copy-editor" class="btn-text">COPY</button>
-                        <button id="clear-editor" class="btn-text">CLEAR</button>
+                <main class="mini-content">
+                    <div class="editor-pane">
+                        <div class="pane-header">
+                            <span>LIVE EDITOR</span>
+                            <div class="pane-actions">
+                                <button id="copy-editor" class="btn-text">COPY</button>
+                                <button id="editor-actions-toggle" class="btn-text btn-toggle" aria-expanded="false" aria-controls="editor-actions-panel" title="Show action buttons">⮟</button>
+                                <button id="clear-editor" class="btn-text">CLEAR</button>
+                            </div>
+                        </div>
+                        <div id="editor-actions-panel" class="editor-actions-panel">
+                            <div class="ai-action-row">
+                                <button id="ai-analyze" class="btn-text btn-analyze">ANALYZE ⚡</button>
+                                <button id="ai-debug" class="btn-text btn-debug">SMART DEBUG 🛠️</button>
+                                <button id="ai-test" class="btn-text btn-test">TESTS 🧪</button>
+                                <button id="ai-optimize" class="btn-text btn-optimize">OPTIMIZE 🚀</button>
+                            </div>
+                            <div class="ai-visual-row">
+                                <button id="ai-flow" class="btn-text btn-flow">FLOW DIAGRAM</button>
+                                <button id="ai-architecture" class="btn-text btn-architecture">SYSTEM ARCHITECTURE</button>
+                            </div>
+                        </div>
+                        <pre><code id="mini-editor" contenteditable="true" spellcheck="false" title="Paste any code here...">// Paste your code here for instant analysis...</code></pre>
+                    </div>
+
+                    <div class="chat-pane">
+                        <div class="pane-header">
+                            <span>ASSISTANT DEBRIEF</span>
+                            <div class="pane-actions">
+                                <button id="export-chat" class="btn-text">EXPORT MD</button>
+                                <button id="clear-chat" class="btn-text">CLEAR ALL</button>
+                            </div>
+                        </div>
+                        <div id="mini-chat" class="chat-history">
+                            <div class="msg assistant">Welcome. I am the WindyX Mini module. Paste your code on the left
+                                and ask anything below.</div>
+                        </div>
+                    </div>
+                </main>
+
+                <footer class="mini-footer">
+                    <div class="input-wrap">
+                        <input type="text" id="mini-input" placeholder="Analyze, Refactor, Optimize..." autocomplete="off">
+                        <button id="mini-send">SEND</button>
+                    </div>
+                </footer>
+            </div>
+        </section>
+
+        <!-- Section 2: API Pro Suite (Full-Spec Diagnostic Lab) -->
+        <section class="viewport-section">
+            <div class="diagnostic-card-pro">
+                <div class="diag-header">
+                    <div class="logo">WINDYX <span class="badge neon-badge">API PRO</span></div>
+                    <div class="diag-meta">
+                        <span id="current-time-diag">SYSTEM // READY</span>
+                        <div class="status-indicator"></div>
                     </div>
                 </div>
-                <pre><code id="mini-editor" contenteditable="true" spellcheck="false" title="Paste any code here...">// Paste your code here for instant analysis...</code></pre>
-            </div>
 
-            <div class="chat-pane">
-                <div class="pane-header">
-                    <span>ASSISTANT DEBRIEF</span>
-                    <button id="clear-chat" class="btn-text">CLEAR ALL</button>
-                </div>
-                <div id="mini-chat" class="chat-history">
-                    <div class="msg assistant">Welcome. I am the Mini Antigravity module. Paste your code on the left
-                        and ask anything below.</div>
-                </div>
-            </div>
-        </main>
+                <div class="diag-workstation">
+                    <!-- Workflow Area -->
+                    <div class="request-panel">
+                        <div class="url-bar-pro">
+                            <select id="api-method">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                            <input type="text" id="api-url" placeholder="Enter Request URL (e.g., http://localhost:3000/api/v1)" value="http://localhost:3000">
+                            <button id="run-api-pro" class="btn-primary-neon">SEND ⚡</button>
+                        </div>
 
-        <footer class="mini-footer">
-            <div class="input-wrap">
-                <input type="text" id="mini-input" placeholder="Analyze, Refactor, Optimize..." autocomplete="off">
-                <button id="mini-send">SEND</button>
+                        <!-- Tab System -->
+                        <div class="tab-system">
+                            <div class="tab-header">
+                                <button class="tab-btn active" data-tab="params">PARAMS</button>
+                                <button class="tab-btn" data-tab="headers">HEADERS</button>
+                                <button class="tab-btn" data-tab="auth">AUTH</button>
+                                <button class="tab-btn" data-tab="body">BODY</button>
+                            </div>
+                            <div class="tab-viewport">
+                                <!-- Params Tab -->
+                                <div id="tab-params" class="tab-pane active">
+                                    <div class="kv-container" id="params-kv">
+                                        <div class="kv-header"><span>KEY</span><span>VALUE</span><span></span></div>
+                                        <div class="kv-row">
+                                            <input type="text" placeholder="Parameter Key" class="kv-key">
+                                            <input type="text" placeholder="Value" class="kv-val">
+                                            <button class="btn-icon">×</button>
+                                        </div>
+                                    </div>
+                                    <button class="btn-text-small" id="add-param">+ ADD PARAMETER</button>
+                                </div>
+                                <!-- Headers Tab -->
+                                <div id="tab-headers" class="tab-pane">
+                                    <div class="kv-container" id="headers-kv">
+                                        <div class="kv-header"><span>HEADER</span><span>VALUE</span><span></span></div>
+                                        <div class="kv-row">
+                                            <input type="text" value="Content-Type" class="kv-key">
+                                            <input type="text" value="application/json" class="kv-val">
+                                            <button class="btn-icon">×</button>
+                                        </div>
+                                    </div>
+                                    <button class="btn-text-small" id="add-header">+ ADD HEADER</button>
+                                </div>
+                                <!-- Auth Tab -->
+                                <div id="tab-auth" class="tab-pane">
+                                    <div class="auth-config">
+                                        <select id="auth-type">
+                                            <option value="none">No Auth</option>
+                                            <option value="bearer">Bearer Token</option>
+                                            <option value="basic">Basic Auth</option>
+                                        </select>
+                                        <input type="text" id="auth-token" placeholder="Authentication Secret..." class="auth-input">
+                                    </div>
+                                </div>
+                                <!-- Body Tab -->
+                                <div id="tab-body" class="tab-pane">
+                                    <textarea id="api-body-pro" placeholder='{ "key": "val" }'></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- History Sidebar Concept -->
+                    <div class="history-sidebar">
+                        <label>RECENT ACTIVITY</label>
+                        <div id="api-history-list" class="history-list">
+                            <div class="history-empty">No recent requests</div>
+                        </div>
+                        <button class="btn-text" id="clear-api-history">CLEAR HISTORY</button>
+                    </div>
+                </div>
+
+                <!-- Shared Result Panel -->
+                <div class="result-panel-pro">
+                    <div class="result-header">
+                        <div class="res-tabs">
+                            <span class="res-tab active">RESPONSE</span>
+                        </div>
+                        <div id="response-meta" class="res-meta-tags">
+                            <!-- Populated on result -->
+                        </div>
+                        <button id="copy-curl" class="btn-text-small">COPY AS cURL</button>
+                    </div>
+                    <pre><code id="api-response-pro" class="language-json">{}</code></pre>
+                </div>
             </div>
-        </footer>
+        </section>
     </div>
+
+    <script src="smart-debug.js"></script>
     <script src="app.js"></script>
 </body>
 
