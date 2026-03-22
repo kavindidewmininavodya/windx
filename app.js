@@ -1,4 +1,4 @@
-// Mini WindyX - Core Logic & Professional Utilities
+// Mini WindX - Core Logic & Professional Utilities
 const editor = document.getElementById("mini-editor");
 const chat = document.getElementById("mini-chat");
 const input = document.getElementById("mini-input");
@@ -82,6 +82,7 @@ function restoreState() {
     // Re-attach listeners for any restored AI action buttons if they existed
     // Since we store innerHTML, we need to re-enhance code blocks
     chat.querySelectorAll('.msg.assistant').forEach(msg => {
+      enhanceDiffBlocks(msg);
       renderMermaidInMessage(msg);
       enhanceCodeBlocks(msg);
     });
@@ -159,7 +160,7 @@ document.getElementById("copy-editor")?.addEventListener("click", () => {
 });
 
 document.getElementById("export-chat")?.addEventListener("click", () => {
-  let markdown = "# WINDYX ANALYSIS DEBRIEF\n\n";
+  let markdown = "# WindX ANALYSIS DEBRIEF\n\n";
   const messages = chat.querySelectorAll('.msg');
   if (messages.length === 0) return alert("No messages to export.");
 
@@ -265,13 +266,15 @@ function appendMessage(role, text) {
     `;
 
     actions.querySelector('[data-action="copy"]').onclick = (e) => {
-      navigator.clipboard.writeText(text);
+      const messageText = content.innerText || text || "";
+      navigator.clipboard.writeText(messageText);
       e.target.textContent = "Copied!";
       setTimeout(() => e.target.textContent = "Copy", 2000);
     };
 
     actions.querySelector('[data-action="share"]').onclick = () => {
-      const blob = new Blob([text], { type: 'text/plain' });
+      const messageText = content.innerText || text || "";
+      const blob = new Blob([messageText], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -342,6 +345,359 @@ function enhanceCodeBlocks(msgElement) {
       wrapper.appendChild(pre);
     }
   });
+}
+
+function splitLines(text) {
+  const normalized = String(text || "").replace(/\r/g, "");
+  return normalized.length ? normalized.split("\n") : [];
+}
+
+function normalizeNewlines(text) {
+  return String(text || "").replace(/\r/g, "");
+}
+
+function applyBeforeAfterPatchToEditor(currentText, beforeText, afterText) {
+  const current = normalizeNewlines(currentText);
+  const before = normalizeNewlines(beforeText);
+  const after = normalizeNewlines(afterText);
+
+  if (!before.trim()) {
+    if (!after.trim()) return current;
+    return current ? `${current}${current.endsWith("\n") ? "" : "\n"}${after}` : after;
+  }
+
+  if (current === before) {
+    return after;
+  }
+
+  const exactIndex = current.indexOf(before);
+  if (exactIndex !== -1) {
+    return `${current.slice(0, exactIndex)}${after}${current.slice(exactIndex + before.length)}`;
+  }
+
+  const beforeTrimmed = before.trim();
+  if (beforeTrimmed) {
+    const trimmedIndex = current.indexOf(beforeTrimmed);
+    if (trimmedIndex !== -1) {
+      return `${current.slice(0, trimmedIndex)}${after}${current.slice(trimmedIndex + beforeTrimmed.length)}`;
+    }
+  }
+
+  return null;
+}
+
+function applySegmentsPatchToEditor(currentText, segments, acceptedHunks) {
+  let current = normalizeNewlines(currentText);
+  let appliedCount = 0;
+
+  for (const segment of segments) {
+    if (segment.type !== "change") continue;
+
+    const before = normalizeNewlines(segment.before.join("\n"));
+    const after = normalizeNewlines(segment.after.join("\n"));
+    const isAccepted = acceptedHunks.has(segment.id);
+
+    if (!before.trim() && !after.trim()) {
+      continue;
+    }
+
+    if (!before.trim()) {
+      if (isAccepted && after.trim()) {
+        current = current ? `${current}${current.endsWith("\n") ? "" : "\n"}${after}` : after;
+        appliedCount += 1;
+      }
+      continue;
+    }
+
+    if (isAccepted) {
+      // Accept: apply correction before -> after.
+      let index = current.indexOf(before);
+      if (index !== -1) {
+        current = `${current.slice(0, index)}${after}${current.slice(index + before.length)}`;
+        appliedCount += 1;
+        continue;
+      }
+
+      const trimmed = before.trim();
+      if (!trimmed) continue;
+
+      index = current.indexOf(trimmed);
+      if (index !== -1) {
+        current = `${current.slice(0, index)}${after}${current.slice(index + trimmed.length)}`;
+        appliedCount += 1;
+      }
+      continue;
+    }
+
+    // Reject: keep or revert to default before-state.
+    if (after.trim()) {
+      let index = current.indexOf(after);
+      if (index !== -1) {
+        current = `${current.slice(0, index)}${before}${current.slice(index + after.length)}`;
+        appliedCount += 1;
+        continue;
+      }
+
+      const afterTrimmed = after.trim();
+      if (afterTrimmed) {
+        index = current.indexOf(afterTrimmed);
+        if (index !== -1) {
+          current = `${current.slice(0, index)}${before}${current.slice(index + afterTrimmed.length)}`;
+          appliedCount += 1;
+        }
+      }
+    }
+
+    // If before already present, reject is already satisfied.
+    if (current.includes(before) || current.includes(before.trim())) {
+      appliedCount += 1;
+    }
+  }
+
+  return appliedCount > 0 ? current : null;
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function computeLineOps(beforeLines, afterLines) {
+  const n = beforeLines.length;
+  const m = afterLines.length;
+  const dp = Array.from({ length: n + 1 }, () => Array(m + 1).fill(0));
+
+  for (let i = 1; i <= n; i += 1) {
+    for (let j = 1; j <= m; j += 1) {
+      if (beforeLines[i - 1] === afterLines[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  const ops = [];
+  let i = n;
+  let j = m;
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && beforeLines[i - 1] === afterLines[j - 1]) {
+      ops.push({ type: "equal", line: beforeLines[i - 1] });
+      i -= 1;
+      j -= 1;
+      continue;
+    }
+
+    if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      ops.push({ type: "add", line: afterLines[j - 1] });
+      j -= 1;
+    } else {
+      ops.push({ type: "remove", line: beforeLines[i - 1] });
+      i -= 1;
+    }
+  }
+
+  return ops.reverse();
+}
+
+function buildDiffSegments(ops) {
+  const segments = [];
+  let equalBuffer = [];
+  let changeBuffer = null;
+  let hunkId = 0;
+
+  const flushEqual = () => {
+    if (!equalBuffer.length) return;
+    segments.push({ type: "equal", lines: equalBuffer.slice() });
+    equalBuffer = [];
+  };
+
+  const flushChange = () => {
+    if (!changeBuffer) return;
+    hunkId += 1;
+    segments.push({
+      type: "change",
+      id: hunkId,
+      before: changeBuffer.before,
+      after: changeBuffer.after
+    });
+    changeBuffer = null;
+  };
+
+  for (const op of ops) {
+    if (op.type === "equal") {
+      flushChange();
+      equalBuffer.push(op.line);
+      continue;
+    }
+
+    flushEqual();
+    if (!changeBuffer) {
+      changeBuffer = { before: [], after: [] };
+    }
+    if (op.type === "remove") {
+      changeBuffer.before.push(op.line);
+    } else {
+      changeBuffer.after.push(op.line);
+    }
+  }
+
+  flushChange();
+  flushEqual();
+  return segments;
+}
+
+function renderDiffLineList(lines, kind) {
+  const safeLines = lines.length ? lines : [""];
+  return `
+    <div class="it-diff-lines ${kind}">
+      ${safeLines.map((line, index) => `<div class="it-diff-line"><span class="it-diff-ln">${index + 1}</span><code>${escapeHtml(line)}</code></div>`).join("")}
+    </div>
+  `;
+}
+
+function createDiffCard(beforeText, afterText, languageHint = "code") {
+  const beforeLines = splitLines(beforeText);
+  const afterLines = splitLines(afterText);
+  const segments = buildDiffSegments(computeLineOps(beforeLines, afterLines));
+  const changeSegments = segments.filter((segment) => segment.type === "change");
+
+  if (!changeSegments.length) {
+    return null;
+  }
+
+  const acceptedHunks = new Set(changeSegments.map((segment) => segment.id));
+  const card = document.createElement("div");
+  card.className = "it-diff-card";
+
+  const hunksMarkup = changeSegments.map((segment) => {
+    return `
+      <div class="it-diff-hunk" data-hunk-id="${segment.id}">
+        <div class="it-diff-hunk-head">
+          <span class="it-diff-hunk-title">Hunk ${segment.id}</span>
+          <div class="it-diff-hunk-actions">
+            <button class="it-hunk-btn accept is-active" data-action="accept" data-hunk-id="${segment.id}">Accept</button>
+            <button class="it-hunk-btn reject" data-action="reject" data-hunk-id="${segment.id}">Reject</button>
+          </div>
+        </div>
+        <div class="it-diff-grid">
+          <div>
+            <div class="it-diff-col-title">Before</div>
+            ${renderDiffLineList(segment.before, "before")}
+          </div>
+          <div>
+            <div class="it-diff-col-title">After</div>
+            ${renderDiffLineList(segment.after, "after")}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  card.innerHTML = `
+    <div class="it-diff-header">
+      <div>
+        <div class="it-diff-title">Smart Diff</div>
+        <div class="it-diff-subtitle">${escapeHtml(languageHint.toUpperCase())} • before/after patch view</div>
+      </div>
+      <button class="it-diff-apply" type="button">Apply to editor</button>
+    </div>
+    <div class="it-diff-hunks">${hunksMarkup}</div>
+  `;
+
+  card.querySelectorAll(".it-hunk-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const hunkId = Number(btn.dataset.hunkId);
+      const action = btn.dataset.action;
+      const hunkRoot = card.querySelector(`.it-diff-hunk[data-hunk-id="${hunkId}"]`);
+      const acceptBtn = hunkRoot?.querySelector(".it-hunk-btn.accept");
+      const rejectBtn = hunkRoot?.querySelector(".it-hunk-btn.reject");
+
+      if (action === "accept") {
+        acceptedHunks.add(hunkId);
+        acceptBtn?.classList.add("is-active");
+        rejectBtn?.classList.remove("is-active");
+      } else {
+        acceptedHunks.delete(hunkId);
+        rejectBtn?.classList.add("is-active");
+        acceptBtn?.classList.remove("is-active");
+      }
+    });
+  });
+
+  card.querySelector(".it-diff-apply")?.addEventListener("click", () => {
+    const merged = [];
+    for (const segment of segments) {
+      if (segment.type === "equal") {
+        merged.push(...segment.lines);
+      } else if (acceptedHunks.has(segment.id)) {
+        merged.push(...segment.after);
+      } else {
+        merged.push(...segment.before);
+      }
+    }
+
+    const mergedTarget = merged.join("\n");
+    const segmentedPatch = applySegmentsPatchToEditor(editor.innerText, segments, acceptedHunks);
+    const patched = segmentedPatch ?? applyBeforeAfterPatchToEditor(editor.innerText, beforeText, mergedTarget);
+
+    if (patched === null) {
+      if (typeof Swal !== "undefined") {
+        Swal.fire({
+          toast: true,
+          position: "center",
+          icon: "warning",
+          title: "Patch could not be auto-applied",
+          text: "The original BEFORE snippet was not found in the current editor.",
+          timer: 2200,
+          showConfirmButton: false,
+          background: "#12171f",
+          color: "#e9f1ff"
+        });
+      }
+      return;
+    }
+
+    editor.innerText = patched;
+    updateEditor();
+    showCenteredSuccess("Applied", "Selected hunks were applied to the editor.");
+  });
+
+  return card;
+}
+
+function enhanceDiffBlocks(msgElement) {
+  const blocks = Array.from(msgElement.querySelectorAll("pre > code"));
+  if (!blocks.length) return;
+
+  for (let index = 0; index < blocks.length - 1; index += 1) {
+    const first = blocks[index];
+    const second = blocks[index + 1];
+    const firstLang = first.className || "";
+    const secondLang = second.className || "";
+
+    if (!firstLang.includes("language-before") || !secondLang.includes("language-after")) {
+      continue;
+    }
+
+    const firstPre = first.parentElement;
+    const secondPre = second.parentElement;
+    if (!firstPre || !secondPre) continue;
+
+    const languageHint = secondLang.replace("language-after", "").replace(/language-/g, "").trim() || "code";
+    const diffCard = createDiffCard(first.textContent || "", second.textContent || "", languageHint);
+    if (!diffCard) continue;
+
+    firstPre.parentNode?.insertBefore(diffCard, firstPre);
+    firstPre.remove();
+    secondPre.remove();
+    index += 1;
+  }
 }
 
 function normalizeMermaidSource(raw) {
@@ -501,6 +857,7 @@ async function handleSend(forcedPrompt = null) {
         }
       }
     }
+    enhanceDiffBlocks(assistantMsg.parentElement);
     await renderMermaidInMessage(assistantMsg.parentElement);
     enhanceCodeBlocks(assistantMsg.parentElement);
     localStorage.setItem(STORAGE_KEY_CHAT, chat.innerHTML);
@@ -523,6 +880,7 @@ function buildPrompt(userText, codeContext) {
   if (!codeContext) {
     return [
       debugContext,
+      "If you are proposing code changes, include a patch view using two fenced blocks in this exact order: ```before ... ``` then ```after ... ```.",
       `Request: ${requestText}`
     ].filter(Boolean).join("\n\n");
   }
@@ -530,6 +888,7 @@ function buildPrompt(userText, codeContext) {
   return [
     `Code Context:\n\`\`\`\n${codeContext}\n\`\`\``,
     debugContext,
+    "If you are proposing code changes, include a patch view using two fenced blocks in this exact order: ```before ... ``` then ```after ... ```.",
     `Request: ${requestText}`
   ].filter(Boolean).join("\n\n");
 }
